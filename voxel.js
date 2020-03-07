@@ -1,8 +1,15 @@
 // BEGIN RENDERING
 var debug = true;
+var debugSegments = false;
+var autoForward = true;
+var lodFalloff = true;
 
 var worldWidth = 0;
 var worldHeight = 0;
+
+// Represents much the view is scaled up compared to the map. Derived later.
+var scaleX = 0;
+var scaleY = 0;
 
 var colorBuffer = [];
 var heightBuffer = [];
@@ -39,7 +46,7 @@ var camera = {
         y: Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
     },
     height: 0.50,  // Default to inbetween the min and max altitudes
-    distance: 300,
+    distance: 100,
     horizon: Math.ceil(playView.canvasHeight / 2.0) // Default the horizon to drawing in the exact middle
 };
 
@@ -89,18 +96,17 @@ function init(view, canvasElementId){
     view.pixelRatio = getPixelRatio(view.context);
     view.initialWidth = view.canvasElement.clientWidth * view.pixelRatio;
     view.initialHeight = view.canvasElement.clientHeight * view.pixelRatio;
+
     rescale(view);
 }
 
 function drawLine(view, options) {
-    view.context.save();
     view.context.beginPath();
     view.context.lineWidth = options.width * view.pixelRatio;
-    view.context.strokeStyle = options.color || "black";
+    view.context.strokeStyle = options.color;
     view.context.moveTo(getSharpPixel(view,options.width, options.fromX), getSharpPixel(view,options.width, options.fromY));
     view.context.lineTo(getSharpPixel(view,options.width, options.toX), getSharpPixel(view,options.width, options.toY));
     view.context.stroke();
-    view.context.restore();
 };
 
 
@@ -115,46 +121,34 @@ function drawLineToBottom(view, options) {
 };
 
 function drawCircle(view, options){
-    view.context.save();
     view.context.strokeStyle = options.color || "black";
     view.context.beginPath();
     view.context.arc(options.x, options.y, options.radius, 0, Math.PI * 2, true);
     view.context.stroke();
-    view.context.restore();
 }
 
 function render(){
     if(debug){renderDebugView();}
     renderPlayView();
+    requestAnimationFrame(render);
 }
 
 function renderPlayView(){
-    var scaleX = (playView.canvasWidth / worldWidth); // Difference between the "world" map and the rendering canvas
-    var scaleY = (playView.canvasHeight / worldHeight); // Difference between the "world" map and the rendering canvas
-
 
     // Paint the sky color
     playView.context.fillStyle = camera.sky.color;
     playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
 
-    var maxZValues = new Array(playView.canvasHeight).fill(0).map(() => new Array(playView.canvasWidth).fill(0));
-
     // Starting at distance away, move closer and closer and stop 1 px away from "camera"
-    for(var z = camera.distance; z > 1; z--){
-    //for(var z = camera.distance; z == camera.distance ; z--){
+    var z = camera.distance;
+    while(z > 1){
 
         // At that distance, we visualize a line of "voxels" that we'll source color and height info from
-        var leftMostPoint = {
-            x: camera.position.x - z, // field of view widens by 1 for every 1 distance away
-            y: camera.position.y - z
-        };
-        var rightMostPoint = {
-            x: camera.position.x + z, // field of view widens by 1 for every 1 distance away
-            y: camera.position.y - z
-        };
+        var leftMostPointX = camera.position.x - z; // field of view widens by 1 for every 1 distance away
+        var rightMostPointX = camera.position.x + z; // field of view widens by 1 for every 1 distance away
 
         // What percent of voxel current distance row is of screenspace?
-        var voxelRowToScreenRatio = (rightMostPoint.x - leftMostPoint.x) / playView.canvasWidth;
+        var voxelRowToScreenRatio = (rightMostPointX - leftMostPointX) / playView.canvasWidth;
 
         //console.log('dx:' + dx);
 
@@ -164,31 +158,29 @@ function renderPlayView(){
 
             // Translate the screenspace coordinate (viewX, z) into the map coordinate
             var mapPoint = {
-                x: Math.ceil(leftMostPoint.x + (screenX * voxelRowToScreenRatio)),
-                y: Math.ceil(leftMostPoint.y)
+                x: Math.ceil(leftMostPointX + (screenX * voxelRowToScreenRatio)),
+                y: Math.ceil(camera.position.y - z)
             };
 
             // Debug the mapPoint
-            // if(debug){
-            //     drawCircle(debugView, {
-            //         x: Math.ceil(mapPoint.x * scaleX),
-            //         y: Math.ceil(mapPoint.y * scaleY),
-            //         radius: 1,
-            //         color: 'rgba(255,255,255,0.05)'
-            //     });
-            // }
+             if(debug && debugSegments){
+                 drawCircle(debugView, {
+                     x: Math.ceil(mapPoint.x * scaleX),
+                     y: Math.ceil(mapPoint.y * scaleY),
+                     radius: 1,
+                     color: 'rgba(255,255,255,0.05)'
+                 });
+             }
 
-            var color = getColorAt(mapPoint.x, mapPoint.y);
+
             var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y);
+            var color = getColorAt(mapPoint.x, mapPoint.y);
+
 
 
             var scaleHeight = playView.canvasHeight/scaleCoefficient;
-            //var screenY =  camera.horizon - (altitudeModifier * playView.canvasHeight) / z * scaleHeight ;
-            //(height - heightmap[pleft.x, pleft.y]) / z * scale_height. + horizon
-            var screenY = (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
 
-
-            //console.log(color);
+            var screenY = (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon;
 
             drawLineToBottom(playView,{
                 fromX: screenX,
@@ -197,23 +189,29 @@ function renderPlayView(){
                 color: color
             });
 
-            //drawCircle(playView,{
-            //    x: screenX,
-            //    y: screenY,
-            //    radius: 1,
-            //    color: color
-            //});
-
         }
-
+        if(lodFalloff){
+            if(z > 0 && z <= 50){
+                z-=1;
+            }
+            else if(z > 50 && z <= 75){
+                z-=2;
+            }
+            else if(z > 75 && z <= 100){
+                z-=3;
+            }
+            else{
+                z-=4;
+            }
+        }
+        else{
+            z--;
+        }
     }
 
 }
 
 function renderDebugView(){
-    var scaleX = (debugView.canvasWidth / worldWidth); // Difference between the "world" map and the rendering canvas
-    var scaleY = (debugView.canvasHeight / worldHeight); // Difference between the "world" map and the rendering canvas
-
     // Draw the color map in the background
     debugView.context.drawImage(
         colorHolderCanvas, // the image to draw (which is our color image canvas where we already store the image)
@@ -271,26 +269,21 @@ function loadImage(url, callback) {
   });
 }
 
-// Get the color map's color at a set of coordinates
-Number.prototype.mod = function(n) {
-    return ((this%n)+n)%n;
-};
+function mod(n, m) {
+  return ((n % m) + m) % m;
+}
+
 function wrapNumber(index,length){
-    if(index < 0){
-        index = index.mod(length);
-    }
-    if(index > length){
-        index = index.mod(length);
+    if(index < 0 || index > length){
+        index = mod(index,length);
     }
     return index;
 }
 function getBufferedValue(arr,x,y){
-    x=Math.ceil(x-1);
-    y=Math.ceil(y-1);
-
+    x=Math.ceil(--x);
+    y=Math.ceil(--y);
     y = wrapNumber(y, arr.length);
     x = wrapNumber(x, arr[y].length);
-
     return arr[y][x];
 }
 
@@ -364,20 +357,18 @@ window.onload = function(){
     ])
     .then(function ()
     {
-        var scaleX = (debugView.canvasWidth / worldWidth); // Difference between the "world" map and the rendering canvas
-        var scaleY = (debugView.canvasHeight / worldHeight); // Difference between the "world" map and the rendering canvas
-
         // Loaded
         console.log('Both images loaded.');
 
         // Initialize views
         init(playView, 'playCanvas');
         init(debugView, 'debugCanvas');
+        scaleX = (playView.canvasWidth / worldWidth); // Difference between the "world" map and the rendering canvas
+        scaleY = (playView.canvasHeight / worldHeight); // Difference between the "world" map and the rendering canvas
         console.log('Canvases initialized');
 
         // Render frame
         render();
-        console.log('Render complete');
 
         // On debug map clicks, teleport camera to that location
         debugView.canvasElement.addEventListener('mousedown', function(e) {
@@ -387,8 +378,16 @@ window.onload = function(){
 
             camera.position.x = x / scaleX;
             camera.position.y = y / scaleY;
-            render();
+            ensureInMap();
+            ensureAboveGround()
+            //render();
         });
+
+        if(autoForward){
+            setInterval(function(){
+                moveForward();
+            },10);
+        }
 
         // On arrow key presses, translate camera
         document.addEventListener('keydown',function(event) {
@@ -414,7 +413,37 @@ window.onload = function(){
             }
         });
     });
+
+    document.getElementById('debugOn').onclick = function(e) {
+        debug = true;
+        document.getElementById('debugSegmentsOn').removeAttribute('disabled');
+        document.getElementById('debugSegmentsOff').removeAttribute('disabled');
+        document.getElementById('debugCanvas').style.display = 'block';
+    };
+    document.getElementById('debugOff').onclick = function(e) {
+        debug = false;
+        document.getElementById('debugSegmentsOn').setAttribute('disabled','disabled');
+        document.getElementById('debugSegmentsOff').setAttribute('disabled','disabled');
+        document.getElementById('debugCanvas').style.display = 'none';
+    };
+    document.getElementById('debugSegmentsOn').onclick = function(e) {
+        debugSegments = true;
+    };
+    document.getElementById('debugSegmentsOff').onclick = function(e) {
+        debugSegments = false;
+    };
+    document.getElementById('lodFalloffOn').onclick = function(e) {
+        lodFalloff = true;
+    };
+    document.getElementById('lodFalloffOff').onclick = function(e) {
+        lodFalloff = false;
+    };
+
+
 };
+
+
+
 
 
 // BEGIN CONTROL
@@ -435,34 +464,34 @@ function moveForward(){
     camera.position.y-= movementSpeed;
     ensureInMap();
     ensureAboveGround()
-    render();
+    //render();
 }
 function moveBackward(){
     camera.position.y+=movementSpeed;
     ensureInMap();
     ensureAboveGround()
-    render();
+    //render();
 }
 function moveLeft(){
     camera.position.x-=movementSpeed;
     ensureInMap();
     ensureAboveGround()
-    render();
+    //render();
 }
 function moveRight(){
     camera.position.x+=movementSpeed;
     ensureInMap();
     ensureAboveGround()
-    render();
+    //render();
 }
 function moveUp(){
     camera.height-=0.1;
     ensureAboveGround()
-    render();
+    //render();
 }
 function moveDown(){
     camera.height+=0.1;
     ensureAboveGround()
-    render();
+    //render();
 }
 // END CONTROL

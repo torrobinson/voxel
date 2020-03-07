@@ -8,18 +8,27 @@
         </style>
     </head>
     <body>
-        Image resources: <br/>
+        <!-- To load our images into memory -->
         <canvas style="display: none" id="colorHolderCanvas"></canvas>
         <canvas style="display: none" id="heightHolderCanvas"></canvas>
         <br/><br/>
 
-        Play canvas:<br/>
         <canvas id="playCanvas"></canvas>
         <br/><br/>
 
-        Debug canvas:<br/>
         <canvas id="debugCanvas"></canvas>
         <br/><br/>
+
+        <button id="debugOn">Debug On</button>
+        <button id="debugOff">Debug Off</button>
+        <br/>
+        <button id="debugSegmentsOn">Debug Segments On</button>
+        <button id="debugSegmentsOff">Debug Segments Off</button>
+        <br/>
+        <button id="lodFalloffOn">LOD falloff On</button>
+        <button id="lodFalloffOff">LOD falloff Off</button>
+
+
     </body>
     <script type="text/javascript" src="voxel.js"></script>
 </html>
