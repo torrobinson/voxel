@@ -1,10 +1,8 @@
 // BEGIN RENDERING
 var debug = true;
 
-var worldWidth = 1024;
-var worldHeight = 1024;
-
-var scaleCoefficient = 1.5;
+var worldWidth = 0;
+var worldHeight = 0;
 
 var colorBuffer = [];
 var heightBuffer = [];
@@ -18,6 +16,9 @@ var playView = {
     initialWidth: null,
     initialHeight: null,
 };
+
+//var scaleCoefficient = 0.9 + (0.010*playView.canvasHeight) - (0.00003*playView.canvasHeight^2);
+var scaleCoefficient = -0.1149488 + (0.02408385*playView.canvasHeight) - (0.00002536409*Math.pow(playView.canvasHeight,2)) + (1.03815*(Math.pow(10,-8))*Math.pow(playView.canvasHeight,3));
 
 var debugView = {
     canvasHeight: 300,
@@ -35,7 +36,7 @@ var camera = {
     },
     position: {
         x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
-        y: Math.ceil(worldHeight / 2.0) - 10 // Default in the middle
+        y: Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
     },
     height: 0.50,  // Default to inbetween the min and max altitudes
     distance: 300,
@@ -135,6 +136,8 @@ function renderPlayView(){
     // Paint the sky color
     playView.context.fillStyle = camera.sky.color;
     playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
+
+    var maxZValues = new Array(playView.canvasHeight).fill(0).map(() => new Array(playView.canvasWidth).fill(0));
 
     // Starting at distance away, move closer and closer and stop 1 px away from "camera"
     for(var z = camera.distance; z > 1; z--){
@@ -269,25 +272,24 @@ function loadImage(url, callback) {
 }
 
 // Get the color map's color at a set of coordinates
+Number.prototype.mod = function(n) {
+    return ((this%n)+n)%n;
+};
+function wrapNumber(index,length){
+    if(index < 0){
+        index = index.mod(length);
+    }
+    if(index > length){
+        index = index.mod(length);
+    }
+    return index;
+}
 function getBufferedValue(arr,x,y){
     x=Math.ceil(x-1);
     y=Math.ceil(y-1);
 
-    if(y>arr.length){
-        y = y % arr.length;
-    }
-
-    if(y<0){
-        y = arr.length + y;
-    }
-
-    if(x>arr[y].length){
-        x = x % arr[y].length;
-    }
-
-    if(x<0){
-        x = arr[y].length + x;
-    }
+    y = wrapNumber(y, arr.length);
+    x = wrapNumber(x, arr[y].length);
 
     return arr[y][x];
 }
@@ -354,6 +356,9 @@ window.onload = function(){
                 }
                 heightBuffer.push(row);
             }
+
+            worldWidth = img.width;
+            worldHeight = img.height;
         }),
 
     ])
@@ -420,27 +425,33 @@ function ensureAboveGround(){
         camera.height = altitudeAtLocation + 0.025;
     }
 }
+function ensureInMap(){
+    if(camera.position.y < 0) camera.position.y = worldHeight;
+    if(camera.position.y > playView.canvasHeight) camera.position.y = 0;
+    if(camera.position.x < 0) camera.position.x = worldWidth;
+    if(camera.position.x > worldHeight) camera.position.x = 0;
+}
 function moveForward(){
     camera.position.y-= movementSpeed;
-    if(camera.position.y < 0) camera.position.x = playView.canvasHeight;
+    ensureInMap();
     ensureAboveGround()
     render();
 }
 function moveBackward(){
     camera.position.y+=movementSpeed;
-    if(camera.position.y > playView.canvasHeight) camera.position.y = 0;
+    ensureInMap();
     ensureAboveGround()
     render();
 }
 function moveLeft(){
     camera.position.x-=movementSpeed;
-    if(camera.position.x < 0) camera.position.x = playView.canvasWidth;
+    ensureInMap();
     ensureAboveGround()
     render();
 }
 function moveRight(){
     camera.position.x+=movementSpeed;
-    if(camera.position.x > playView.canvasWidth) camera.position.x = 0;
+    ensureInMap();
     ensureAboveGround()
     render();
 }
