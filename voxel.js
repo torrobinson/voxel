@@ -2,7 +2,7 @@
 var debug = true;
 var debugSegments = false;
 var lodFalloff = true;
-var falloffStepAmount = 1/7500;
+var falloffStepAmount = 1/10000;
 
 var worldWidth = 0;
 var worldHeight = 0;
@@ -201,8 +201,8 @@ function gameLoop(){
     ensureAboveGround();
 
     // Render
-    renderPlayView();
     if(debug){renderDebugView();}
+    renderPlayView();
 
     // And loop
     requestAnimationFrame(gameLoop);
@@ -248,6 +248,18 @@ function renderPlayView(){
             layerFadeAdd = 0;
         }
 
+        // Debug the voxel rows
+         if(debug && debugSegments){
+             drawLine(debugView, {
+                 fromX: Math.ceil(leftMostPointX * debugScaleX),
+                 fromY: (camera.position.y - z) * debugScaleX,
+                 toX: Math.ceil(rightMostPointX * debugScaleX),
+                 toY: (camera.position.y - z) * debugScaleX,
+                 width: 1,
+                 color: 'rgba(255,255,255,0.5)'
+             });
+         }
+
         // For each pixel in the screen width I need to fill up
         for(var screenX = 0; screenX < playView.canvasWidth; screenX++){
 
@@ -256,17 +268,6 @@ function renderPlayView(){
                 x: Math.ceil(leftMostPointX + (screenX * voxelRowToScreenRatio)),
                 y: Math.ceil(camera.position.y - z)
             };
-
-            // Debug the mapPoint
-             if(debug && debugSegments){
-                 drawCircle(debugView, {
-                     x: Math.ceil(mapPoint.x * scaleX),
-                     y: Math.ceil(mapPoint.y * scaleY),
-                     radius: 1,
-                     color: 'rgba(255,255,255,0.05)'
-                 });
-             }
-
 
             var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y);
             var color = getColorAt(mapPoint.x, mapPoint.y);
