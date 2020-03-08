@@ -126,7 +126,6 @@ function drawPixelToBuffer(imageData, x, y, r, g, b, a) {
 function drawFrameBufferLineToBottom(imageData, lengthDown, x, y, r, g, b){
     for(var i=0;i<lengthDown;i++){
         drawPixelToBuffer(imageData, x, y+i, r, g, b, 255);
-        y++;
     }
 }
 
@@ -163,7 +162,7 @@ function renderPlayView(){
     frameImageData = playView.context.createImageData(playView.canvasWidth, playView.canvasHeight);
 
 
-    playView.context.fillStyle = camera.sky.color;
+    //playView.context.fillStyle = camera.sky.color;
     //playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
 
     // Starting at distance away, move closer and closer and stop 1 px away from "camera"
@@ -220,6 +219,8 @@ function renderPlayView(){
                     color[1], //g
                     color[2] //b
                  );
+
+                 //playView.context.putImageData(frameImageData,0,0);
             }
             // drawLineToBottom(playView,{
             //     fromX: screenX,
@@ -231,10 +232,10 @@ function renderPlayView(){
         }
         if(lodFalloff){
             if(z > 0 && z <= 50){
-                z-=1;
+                z-=0.5;
             }
             else if(z > 50 && z <= 75){
-                z-=2;
+                z-=1;
             }
             else if(z > 75 && z <= 100){
                 z-=3;
