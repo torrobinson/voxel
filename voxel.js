@@ -2,7 +2,7 @@
 var debug = true;
 var debugSegments = false;
 var lodFalloff = true;
-var falloffStepAmount = 1/8000;
+var falloffStepAmount = 1/7500;
 
 var worldWidth = 0;
 var worldHeight = 0;
@@ -41,7 +41,11 @@ var debugView = {
 
 var camera = {
     sky: {
-        color: 'rgb(192, 221, 237)'
+        color: {
+            r: 255,
+            g: 255,
+            b: 255
+        }
     },
     position: {
         x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
@@ -58,13 +62,13 @@ var camera = {
         }
     },
     speeds: {
-        x: 0.25,
-        y: 0.25,
+        x: 0.15,
+        y: 0.15,
         z: 0.025,
         max: 5,
     },
     height: 0.50,  // Default to inbetween the min and max altitudes
-    distance: 2000,
+    distance: 1000,
     horizon: Math.ceil(playView.canvasHeight / 2.0) // Default the horizon to drawing in the exact middle
 };
 
@@ -159,12 +163,12 @@ function drawCircle(view, options){
 
 function gameLoop(){
     // Based on key states, affect run movement
-    if(upArrowPressed) moveForward();
-    if(downArrowPressed) moveBackward();
-    if(leftArrowPressed) moveLeft();
-    if(rightArrowPressed) moveRight();
-    if(rPressed) moveUp();
-    if(fPressed) moveDown();
+    if(moveForwardPressed) moveForward();
+    if(downBackPressed) moveBackward();
+    if(moveLeftPressed) moveLeft();
+    if(moveRightPressed) moveRight();
+    if(risePressed) moveUp();
+    if(fallPressed) moveDown();
 
     // Set camera position based on velocity
     camera.position.x += camera.velocity.x;
@@ -206,11 +210,22 @@ function gameLoop(){
 
 function renderPlayView(){
 
-    // Clear the image data buffer
+    // Clear the image data
     frameImageData = playView.context.createImageData(playView.canvasWidth, playView.canvasHeight);
 
-    //playView.context.fillStyle = camera.sky.color;
-    //playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
+    // paint the sky
+    for(var i=0; i<= frameImageData.data.length; i+=4){
+        frameImageData.data[i] = camera.sky.color.r;
+        frameImageData.data[i+1] = camera.sky.color.g;
+        frameImageData.data[i+2] = camera.sky.color.b;
+        frameImageData.data[i+3] = 255;
+    }
+
+    var percentFromBackToFade = 0.25;
+    var layersFromBackToFade = camera.distance * percentFromBackToFade;
+    var maxFadeAdd= 255.0;
+    var fadePerLayer = maxFadeAdd/layersFromBackToFade;
+
 
     // XXX
     var z = 1;
@@ -225,10 +240,15 @@ function renderPlayView(){
         // What percent of voxel current distance row is of screenspace?
         var voxelRowToScreenRatio = (rightMostPointX - leftMostPointX) / playView.canvasWidth;
 
-        //console.log('dx:' + dx);
+        var layerFadeAdd;
+        if(z >= camera.distance - layersFromBackToFade){
+            layerFadeAdd = Math.abs(camera.distance-layersFromBackToFade-z)*fadePerLayer;
+        }
+        else{
+            layerFadeAdd = 0;
+        }
 
         // For each pixel in the screen width I need to fill up
-
         for(var screenX = 0; screenX < playView.canvasWidth; screenX++){
 
             // Translate the screenspace coordinate (viewX, z) into the map coordinate
@@ -251,8 +271,14 @@ function renderPlayView(){
             var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y);
             var color = getColorAt(mapPoint.x, mapPoint.y);
 
+
+            if(layerFadeAdd > 0)
+                color = fade(color, layerFadeAdd);
+
+
+
             // Give our 0 -> 1 numbers some weight with a scale. Mucking around until a number feels right, given size of worldmap
-            var scaleHeight = 200;
+            var scaleHeight = 300;
 
             var screenY = Math.ceil(
                 (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
@@ -390,6 +416,14 @@ function getHeightAt(x,y){
 function getColorAt(x,y){
     return  get1DArrayValueAtCoordinates(colorImageData,x,y);
 }
+function fade(color,amount){
+    return [
+        color[0] + amount,
+        color[1] + amount,
+        color[2] + amount,
+        color[3]
+    ];
+};
 
 // END IMAGE
 
@@ -469,20 +503,20 @@ window.onload = function(){
         // Track key states
         document.addEventListener('keydown',function(e) {
              // disable the browser usign arrow keys to scroll or anything else
-            if(event.keyCode === 37) {leftArrowPressed = true; pd(e);}
-            if(event.keyCode === 38) {upArrowPressed = true; pd(e);}
-            if(event.keyCode === 39) {rightArrowPressed = true; pd(e);}
-            if(event.keyCode === 40) {downArrowPressed = true; pd(e);}
-            if(event.keyCode === 70) {rPressed = true; pd(e);}
-            if(event.keyCode === 82) {fPressed = true; pd(e);}
+            if(event.keyCode === 65) {moveLeftPressed = true; pd(e);}
+            if(event.keyCode === 87) {moveForwardPressed = true; pd(e);}
+            if(event.keyCode === 68) {moveRightPressed = true; pd(e);}
+            if(event.keyCode === 83) {downBackPressed = true; pd(e);}
+            if(event.keyCode === 67) {risePressed = true; pd(e);}
+            if(event.keyCode === 69) {fallPressed = true; pd(e);}
         });
         document.addEventListener('keyup',function(e) {
-            if(event.keyCode === 37) leftArrowPressed = false;
-            if(event.keyCode === 38) upArrowPressed = false;
-            if(event.keyCode === 39) rightArrowPressed = false;
-            if(event.keyCode === 40) downArrowPressed = false;
-            if(event.keyCode === 70) rPressed = false;
-            if(event.keyCode === 82) fPressed = false;
+            if(event.keyCode === 65) moveLeftPressed = false;
+            if(event.keyCode === 87) moveForwardPressed = false;
+            if(event.keyCode === 68) moveRightPressed = false;
+            if(event.keyCode === 83) downBackPressed = false;
+            if(event.keyCode === 67) risePressed = false;
+            if(event.keyCode === 69) fallPressed = false;
         });
     });
 
@@ -515,16 +549,13 @@ window.onload = function(){
 };
 
 
-
-
-
 // BEGIN CONTROL
-var upArrowPressed = false;
-var downArrowPressed = false;
-var leftArrowPressed = false;
-var rightArrowPressed = false;
-var rPressed = false;
-var fPressed = false;
+var moveForwardPressed = false;
+var downBackPressed = false;
+var moveLeftPressed = false;
+var moveRightPressed = false;
+var risePressed = false;
+var fallPressed = false;
 function ensureAboveGround(){
     var altitudeAtLocation = getHeightAt(camera.position.x, camera.position.y);
     if(camera.height <= altitudeAtLocation){
