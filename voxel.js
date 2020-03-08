@@ -1,9 +1,8 @@
 // BEGIN RENDERING
 var debug = true;
 var debugSegments = false;
-var autoForward = false;
 var lodFalloff = true;
-var falloffStepAmount = 0.00025;
+var falloffStepAmount = 1/8000;
 
 var worldWidth = 0;
 var worldHeight = 0;
@@ -20,8 +19,8 @@ var heightImageData = null;
 var frameImageData = null;
 
 var playView = {
-    canvasHeight: 400,
-    canvasWidth: 600,
+    canvasHeight: 450,
+    canvasWidth: 900,
     context: null,
     canvasElement: null,
     pixelRatio: null,
@@ -47,6 +46,22 @@ var camera = {
     position: {
         x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
         y: Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
+    },
+    velocity: {
+        x: 0.00,
+        y: 0.00,
+        z: 0.00,
+        friction:{
+            x: 0.05,
+            y: 0.05,
+            z: 0.01
+        }
+    },
+    speeds: {
+        x: 0.25,
+        y: 0.25,
+        z: 0.025,
+        max: 5,
     },
     height: 0.50,  // Default to inbetween the min and max altitudes
     distance: 2000,
@@ -76,13 +91,6 @@ function rescale(view) {
 
   view.context.setTransform(view.pixelRatio, 0, 0, view.pixelRatio, 0, 0);
 }
-
-window.addEventListener('resize', function(args) {
-    for(var i = 0; i< allViews.length; i++){
-        rescale(allViews[i]);
-    }
-    render();
-}, false);
 
 function getSharpPixel(view, thickness, pos) {
   if (thickness % 2 == 0) {
@@ -149,13 +157,51 @@ function drawCircle(view, options){
     view.context.stroke();
 }
 
-function render(){
-    if(debug){renderDebugView();}
+function gameLoop(){
+    // Based on key states, affect run movement
+    if(upArrowPressed) moveForward();
+    if(downArrowPressed) moveBackward();
+    if(leftArrowPressed) moveLeft();
+    if(rightArrowPressed) moveRight();
+    if(rPressed) moveUp();
+    if(fPressed) moveDown();
+
+    // Set camera position based on velocity
+    camera.position.x += camera.velocity.x;
+    camera.position.y += camera.velocity.y;
+    camera.height += camera.velocity.z;
+
+    // Constantly apply a negative velocity to our movement velocity
+    if(camera.velocity.x > 0) camera.velocity.x -= camera.velocity.friction.x;
+    else if(camera.velocity.x < 0) camera.velocity.x += camera.velocity.friction.x;
+
+    if(camera.velocity.y > 0) camera.velocity.y -= camera.velocity.friction.y;
+    else if(camera.velocity.y < 0) camera.velocity.y += camera.velocity.friction.y;
+
+    if(camera.velocity.z > 0) camera.velocity.z -= camera.velocity.friction.z;
+    else if(camera.velocity.z < 0) camera.velocity.z += camera.velocity.friction.z;
+
+    // And stop if we're slow enough
+    var stopThreshold = 0.01;
+    if(camera.velocity.x > 0 && camera.velocity.x < stopThreshold) camera.velocity.x = 0;
+    if(camera.velocity.x < 0 && camera.velocity.x > -stopThreshold) camera.velocity.x = 0;
+    if(camera.velocity.y > 0 && camera.velocity.y < stopThreshold) camera.velocity.y = 0;
+    if(camera.velocity.y < 0 && camera.velocity.y > -stopThreshold) camera.velocity.y = 0;
+    if(camera.velocity.z > 0 && camera.velocity.z < stopThreshold) camera.velocity.z = 0;
+    if(camera.velocity.z < 0 && camera.velocity.z > -stopThreshold) camera.velocity.z = 0;
+
+    // Wrap us around the map if we just left it
+    ensureInMap();
+
+    // Ensure we can't clip into the map
+    ensureAboveGround();
+
+    // Render
     renderPlayView();
-    requestAnimationFrame(render);
-    if(autoForward){
-        moveForward();
-    }
+    if(debug){renderDebugView();}
+
+    // And loop
+    requestAnimationFrame(gameLoop);
 }
 
 function renderPlayView(){
@@ -202,7 +248,7 @@ function renderPlayView(){
              }
 
 
-            var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y)[0]/255;
+            var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y);
             var color = getColorAt(mapPoint.x, mapPoint.y);
 
             // Give our 0 -> 1 numbers some weight with a scale. Mucking around until a number feels right, given size of worldmap
@@ -339,7 +385,7 @@ function get1DArrayValueAtCoordinates(imageData,x,y){
 
 // Get the height map's color at a set of coordinates
 function getHeightAt(x,y){
-    return get1DArrayValueAtCoordinates(heightImageData,x,y);
+    return get1DArrayValueAtCoordinates(heightImageData,x,y)[0]/255;
 }
 function getColorAt(x,y){
     return  get1DArrayValueAtCoordinates(colorImageData,x,y);
@@ -349,7 +395,7 @@ function getColorAt(x,y){
 
 
 
-
+function pd(e) {e.preventDefault();}
 
 
 
@@ -405,8 +451,8 @@ window.onload = function(){
 
         console.log('Canvases initialized');
 
-        // Render frame
-        render();
+        // Strart game loop
+        gameLoop();
 
         // On debug map clicks, teleport camera to that location
         debugView.canvasElement.addEventListener('mousedown', function(e) {
@@ -418,31 +464,25 @@ window.onload = function(){
             camera.position.y = y / debugScaleY;
             ensureInMap();
             ensureAboveGround()
-            //render();
         });
 
-        // On arrow key presses, translate camera
-        document.addEventListener('keydown',function(event) {
-            switch (event.keyCode) {
-               case 37: // LEFT
-                    moveLeft();
-                  break;
-               case 38: // UP
-                    moveForward();
-                  break;
-               case 39: // RIGHT
-                    moveRight();
-                  break;
-               case 40: // DOWN
-                    moveBackward();
-                  break;
-              case 70: // F = FALL
-                   moveUp();
-                 break;
-             case 82: // R = RISE
-                  moveDown();
-                break;
-            }
+        // Track key states
+        document.addEventListener('keydown',function(e) {
+             // disable the browser usign arrow keys to scroll or anything else
+            if(event.keyCode === 37) {leftArrowPressed = true; pd(e);}
+            if(event.keyCode === 38) {upArrowPressed = true; pd(e);}
+            if(event.keyCode === 39) {rightArrowPressed = true; pd(e);}
+            if(event.keyCode === 40) {downArrowPressed = true; pd(e);}
+            if(event.keyCode === 70) {rPressed = true; pd(e);}
+            if(event.keyCode === 82) {fPressed = true; pd(e);}
+        });
+        document.addEventListener('keyup',function(e) {
+            if(event.keyCode === 37) leftArrowPressed = false;
+            if(event.keyCode === 38) upArrowPressed = false;
+            if(event.keyCode === 39) rightArrowPressed = false;
+            if(event.keyCode === 40) downArrowPressed = false;
+            if(event.keyCode === 70) rPressed = false;
+            if(event.keyCode === 82) fPressed = false;
         });
     });
 
@@ -479,51 +519,42 @@ window.onload = function(){
 
 
 // BEGIN CONTROL
-var movementSpeed = 1;
+var upArrowPressed = false;
+var downArrowPressed = false;
+var leftArrowPressed = false;
+var rightArrowPressed = false;
+var rPressed = false;
+var fPressed = false;
 function ensureAboveGround(){
     var altitudeAtLocation = getHeightAt(camera.position.x, camera.position.y);
     if(camera.height <= altitudeAtLocation){
-        camera.height = altitudeAtLocation + 0.025;
+        camera.height = altitudeAtLocation + 0.05;
     }
 }
 function ensureInMap(){
-    if(camera.position.y < 0) camera.position.y = worldHeight - movementSpeed;
-    if(camera.position.y > worldWidth) camera.position.y = 0 + movementSpeed;
-    if(camera.position.x < 0) camera.position.x = worldWidth - movementSpeed;
-    if(camera.position.x > worldHeight) camera.position.x = 0 + movementSpeed;
+    if(camera.position.y < 0) camera.position.y = worldHeight;
+    if(camera.position.y > worldWidth) camera.position.y = 0;
+    if(camera.position.x < 0) camera.position.x = worldWidth;
+    if(camera.position.x > worldHeight) camera.position.x = 0;
 }
 function moveForward(){
-    camera.position.y-= movementSpeed;
+    if(camera.velocity.y > -camera.speeds.max) camera.velocity.y-= camera.speeds.y;
     ensureInMap();
-    ensureAboveGround()
-    //render();
 }
 function moveBackward(){
-    camera.position.y+=movementSpeed;
-    ensureInMap();
-    ensureAboveGround()
-    //render();
+    if(camera.velocity.y < camera.speeds.max) camera.velocity.y+=camera.speeds.y;
 }
 function moveLeft(){
-    camera.position.x-=movementSpeed;
-    ensureInMap();
-    ensureAboveGround()
-    //render();
+    if(camera.velocity.x > -camera.speeds.max) camera.velocity.x-=camera.speeds.x;
 }
 function moveRight(){
-    camera.position.x+=movementSpeed;
+    if(camera.velocity.x < camera.speeds.max) camera.velocity.x+=camera.speeds.x;
     ensureInMap();
-    ensureAboveGround()
-    //render();
 }
 function moveUp(){
-    camera.height-=0.1;
-    ensureAboveGround()
-    //render();
+    if(camera.velocity.z > -camera.speeds.max) camera.velocity.z -= camera.speeds.z;
 }
 function moveDown(){
-    camera.height+=0.1;
-    ensureAboveGround()
-    //render();
+    if(camera.velocity.z < camera.speeds.max) camera.velocity.z+= camera.speeds.z;
 }
 // END CONTROL
