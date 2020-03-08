@@ -11,8 +11,9 @@ var worldHeight = 0;
 var scaleX = 0;
 var scaleY = 0;
 
-var colorBuffer = [];
-var heightBuffer = [];
+var colorImageData = null;
+var heightImageData = null;
+var frameImageData = null;
 
 var playView = {
     canvasHeight: 300,
@@ -46,7 +47,7 @@ var camera = {
         y: Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
     },
     height: 0.50,  // Default to inbetween the min and max altitudes
-    distance: 100,
+    distance: 200,
     horizon: Math.ceil(playView.canvasHeight / 2.0) // Default the horizon to drawing in the exact middle
 };
 
@@ -97,6 +98,10 @@ function init(view, canvasElementId){
     view.initialWidth = view.canvasElement.clientWidth * view.pixelRatio;
     view.initialHeight = view.canvasElement.clientHeight * view.pixelRatio;
 
+    playView.canvasElement.bufarray = new ArrayBuffer(playView.canvasWidth * playView.canvasHeight * 4);
+    playView.canvasElement.buf8     = new Uint8Array(playView.canvasElement.bufarray);
+    playView.canvasElement.buf32    = new Uint32Array(playView.canvasElement.bufarray);
+
     rescale(view);
 }
 
@@ -108,6 +113,22 @@ function drawLine(view, options) {
     view.context.lineTo(getSharpPixel(view,options.width, options.toX), getSharpPixel(view,options.width, options.toY));
     view.context.stroke();
 };
+
+
+function drawPixelToBuffer(imageData, x, y, r, g, b, a) {
+    index = (x + y * imageData.width) * 4;
+    imageData.data[index+0] = r;
+    imageData.data[index+1] = g;
+    imageData.data[index+2] = b;
+    imageData.data[index+3] = a;
+}
+
+function drawFrameBufferLineToBottom(imageData, lengthDown, x, y, r, g, b){
+    for(var i=0;i<lengthDown;i++){
+        drawPixelToBuffer(imageData, x, y+i, r, g, b, 255);
+        y++;
+    }
+}
 
 
 
@@ -131,13 +152,19 @@ function render(){
     if(debug){renderDebugView();}
     renderPlayView();
     requestAnimationFrame(render);
+    if(autoForward){
+        moveForward();
+    }
 }
 
 function renderPlayView(){
 
-    // Paint the sky color
+    // Clear the image data buffer
+    frameImageData = playView.context.createImageData(playView.canvasWidth, playView.canvasHeight);
+
+
     playView.context.fillStyle = camera.sky.color;
-    playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
+    //playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
 
     // Starting at distance away, move closer and closer and stop 1 px away from "camera"
     var z = camera.distance;
@@ -173,21 +200,33 @@ function renderPlayView(){
              }
 
 
-            var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y);
+            var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y)[0]/255;
             var color = getColorAt(mapPoint.x, mapPoint.y);
 
 
 
             var scaleHeight = playView.canvasHeight/scaleCoefficient;
 
-            var screenY = (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon;
+            var screenY = Math.ceil(
+                (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
+            );
 
-            drawLineToBottom(playView,{
-                fromX: screenX,
-                fromY: screenY,
-                width: 1,
-                color: color
-            });
+            if(screenY > 0 && screenY < playView.canvasHeight){
+                drawFrameBufferLineToBottom(frameImageData,
+                    playView.canvasHeight - screenY, // legnthdown
+                    screenX, //x
+                    screenY, //y
+                    color[0], //r
+                    color[1], //g
+                    color[2] //b
+                 );
+            }
+            // drawLineToBottom(playView,{
+            //     fromX: screenX,
+            //     fromY: screenY,
+            //     width: 1,
+            //     color: color
+            // });
 
         }
         if(lodFalloff){
@@ -208,6 +247,10 @@ function renderPlayView(){
             z--;
         }
     }
+
+    playView.context.putImageData(frameImageData,0,0);
+    //playView.canvasElement.imagedata.data.set(playView.canvasElement.buf8);
+    //playView.context.putImageData(playView.canvasElement.imagedata, 0, 0);
 
 }
 
@@ -279,20 +322,33 @@ function wrapNumber(index,length){
     }
     return index;
 }
-function getBufferedValue(arr,x,y){
+function get1DArrayValueAtCoordinates(imageData,x,y){
+    // Image coords aren't 0-index. Correct that.
     x=Math.ceil(--x);
     y=Math.ceil(--y);
-    y = wrapNumber(y, arr.length);
-    x = wrapNumber(x, arr[y].length);
-    return arr[y][x];
+
+    // Wrap the x/y coords into postive numbers so that our renderer wraps horizontally and vertically
+    y = wrapNumber(y, imageData.height);
+    x = wrapNumber(x, imageData.width);
+
+    // Our image data is stored as an array of 0->255 values representing r,g,b,a in a 1D format.
+    // Get the value by skipping in groups of 4
+    var index = (x + y * imageData.width) * 4;
+    // r,g,b,a
+    return [
+            imageData.data[index],
+            imageData.data[index + 1],
+            imageData.data[index + 2],
+            imageData.data[index + 3]
+        ];
 }
 
 // Get the height map's color at a set of coordinates
 function getHeightAt(x,y){
-    return getBufferedValue(heightBuffer,x,y);
+    return get1DArrayValueAtCoordinates(heightImageData,x,y);
 }
 function getColorAt(x,y){
-    return getBufferedValue(colorBuffer,x,y);
+    return  get1DArrayValueAtCoordinates(colorImageData,x,y);
 }
 
 // END IMAGE
@@ -320,16 +376,8 @@ window.onload = function(){
             colorHolderCanvas.height = img.height;
             colorHolderCanvas.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
 
-            // Buffer the colors
-            colorBuffer = [];
-            for(var y = 0; y < img.height; y++){
-                var row = [];
-                for(var x = 0; x < img.width; x++){
-                    var color = colorHolderCanvas.getContext('2d').getImageData(x, y, 1, 1).data;
-                    row.push( 'rgb('+color[0]+','+color[1]+','+color[2]+')' );
-                }
-                colorBuffer.push(row);
-            }
+            // Load colors
+            colorImageData =  colorHolderCanvas.getContext('2d').getImageData(0, 0, img.width, img.height);
         }),
 
         loadImage("height.png",  (img) => {
@@ -339,16 +387,8 @@ window.onload = function(){
             heightHolderCanvas.height = img.height;
             heightHolderCanvas.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
 
-            // Buffer the heights
-            heightBuffer = [];
-            for(var y = 0; y < img.height; y++){
-                var row = [];
-                for(var x = 0; x < img.width; x++){
-                    var color = heightHolderCanvas.getContext('2d').getImageData(x, y, 1, 1).data;
-                    row.push( color[0] / 255 );
-                }
-                heightBuffer.push(row);
-            }
+            // Load heights
+            heightImageData =  heightHolderCanvas.getContext('2d').getImageData(0, 0, img.width, img.height);
 
             worldWidth = img.width;
             worldHeight = img.height;
@@ -382,12 +422,6 @@ window.onload = function(){
             ensureAboveGround()
             //render();
         });
-
-        if(autoForward){
-            setInterval(function(){
-                moveForward();
-            },10);
-        }
 
         // On arrow key presses, translate camera
         document.addEventListener('keydown',function(event) {
@@ -447,7 +481,7 @@ window.onload = function(){
 
 
 // BEGIN CONTROL
-var movementSpeed = 2;
+var movementSpeed = 1;
 function ensureAboveGround(){
     var altitudeAtLocation = getHeightAt(camera.position.x, camera.position.y);
     if(camera.height <= altitudeAtLocation){
