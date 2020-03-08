@@ -1,8 +1,9 @@
 // BEGIN RENDERING
 var debug = true;
 var debugSegments = false;
-var autoForward = true;
+var autoForward = false;
 var lodFalloff = true;
+var falloffStepAmount = 0.00025;
 
 var worldWidth = 0;
 var worldHeight = 0;
@@ -11,13 +12,16 @@ var worldHeight = 0;
 var scaleX = 0;
 var scaleY = 0;
 
+var debugScaleX = 0;
+var debugScaleY = 0;
+
 var colorImageData = null;
 var heightImageData = null;
 var frameImageData = null;
 
 var playView = {
-    canvasHeight: 300,
-    canvasWidth: 300,
+    canvasHeight: 400,
+    canvasWidth: 600,
     context: null,
     canvasElement: null,
     pixelRatio: null,
@@ -25,8 +29,6 @@ var playView = {
     initialHeight: null,
 };
 
-//var scaleCoefficient = 0.9 + (0.010*playView.canvasHeight) - (0.00003*playView.canvasHeight^2);
-var scaleCoefficient = -0.1149488 + (0.02408385*playView.canvasHeight) - (0.00002536409*Math.pow(playView.canvasHeight,2)) + (1.03815*(Math.pow(10,-8))*Math.pow(playView.canvasHeight,3));
 
 var debugView = {
     canvasHeight: 300,
@@ -47,7 +49,7 @@ var camera = {
         y: Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
     },
     height: 0.50,  // Default to inbetween the min and max altitudes
-    distance: 200,
+    distance: 2000,
     horizon: Math.ceil(playView.canvasHeight / 2.0) // Default the horizon to drawing in the exact middle
 };
 
@@ -161,13 +163,14 @@ function renderPlayView(){
     // Clear the image data buffer
     frameImageData = playView.context.createImageData(playView.canvasWidth, playView.canvasHeight);
 
-
     //playView.context.fillStyle = camera.sky.color;
     //playView.context.fillRect(0, 0, playView.canvasWidth, playView.canvasHeight);
 
-    // Starting at distance away, move closer and closer and stop 1 px away from "camera"
-    var z = camera.distance;
-    while(z > 1){
+    // XXX
+    var z = 1;
+    var stepLength = 1;
+    var tallestLineStartYsPerX = new Array(playView.canvasWidth).fill(playView.canvasHeight);
+    while(z < camera.distance){
 
         // At that distance, we visualize a line of "voxels" that we'll source color and height info from
         var leftMostPointX = camera.position.x - z; // field of view widens by 1 for every 1 distance away
@@ -202,56 +205,46 @@ function renderPlayView(){
             var altitudeModifier = getHeightAt(mapPoint.x, mapPoint.y)[0]/255;
             var color = getColorAt(mapPoint.x, mapPoint.y);
 
-
-
-            var scaleHeight = playView.canvasHeight/scaleCoefficient;
+            // Give our 0 -> 1 numbers some weight with a scale. Mucking around until a number feels right, given size of worldmap
+            var scaleHeight = 200;
 
             var screenY = Math.ceil(
                 (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
             );
 
-            if(screenY > 0 && screenY < playView.canvasHeight){
-                drawFrameBufferLineToBottom(frameImageData,
-                    playView.canvasHeight - screenY, // legnthdown
-                    screenX, //x
-                    screenY, //y
-                    color[0], //r
-                    color[1], //g
-                    color[2] //b
-                 );
 
-                 //playView.context.putImageData(frameImageData,0,0);
+            // Drawing at anything off screen is useless
+            if(screenY<playView.canvasHeight){
+
+                // If we're about to draw taller than the tallest line so far
+                var lengthToDrawDown = tallestLineStartYsPerX[screenX] - screenY;
+                if(lengthToDrawDown > 0){
+                    // If we're not occluded by something previous to this voxel row that was "taller"
+                    drawFrameBufferLineToBottom(frameImageData,
+                        lengthToDrawDown, // lengthdown
+                        screenX, //x
+                        screenY, //y
+                        color[0], //r
+                        color[1], //g
+                        color[2] //b
+                     );
+                }
+
+                // Note the tallest heigh so we dont render overtop of it again for this frame
+                if(screenY < tallestLineStartYsPerX[screenX]){
+                    tallestLineStartYsPerX[screenX] = screenY;
+                }
             }
-            // drawLineToBottom(playView,{
-            //     fromX: screenX,
-            //     fromY: screenY,
-            //     width: 1,
-            //     color: color
-            // });
+
 
         }
         if(lodFalloff){
-            if(z > 0 && z <= 50){
-                z-=0.5;
-            }
-            else if(z > 50 && z <= 75){
-                z-=1;
-            }
-            else if(z > 75 && z <= 100){
-                z-=3;
-            }
-            else{
-                z-=4;
-            }
+            stepLength+=z*falloffStepAmount;
         }
-        else{
-            z--;
-        }
+        z+=stepLength;
     }
 
     playView.context.putImageData(frameImageData,0,0);
-    //playView.canvasElement.imagedata.data.set(playView.canvasElement.buf8);
-    //playView.context.putImageData(playView.canvasElement.imagedata, 0, 0);
 
 }
 
@@ -267,8 +260,8 @@ function renderDebugView(){
 
     // Draw camera
     drawCircle(debugView,{
-        x: camera.position.x * scaleX ,
-        y: camera.position.y * scaleY,
+        x: camera.position.x * debugScaleX ,
+        y: camera.position.y * debugScaleY,
         radius: 3,
         color: 'red'
     });
@@ -276,19 +269,19 @@ function renderDebugView(){
     // Draw the FOV
     // Left
     drawLine(debugView,{
-        fromX: camera.position.x * scaleX,
-        fromY: camera.position.y * scaleY,
-        toX: (camera.position.x - camera.distance) * scaleX,
-        toY: (camera.position.y - camera.distance) * scaleY,
+        fromX: camera.position.x * debugScaleX,
+        fromY: camera.position.y * debugScaleY,
+        toX: (camera.position.x - camera.distance) * debugScaleX,
+        toY: (camera.position.y - camera.distance) * debugScaleY,
         width: 1,
         color: 'red'
     });
     // Right
     drawLine(debugView,{
-        fromX: camera.position.x * scaleX,
-        fromY: camera.position.y * scaleY,
-        toX: (camera.position.x + camera.distance) * scaleX,
-        toY: (camera.position.y - camera.distance) * scaleY,
+        fromX: camera.position.x * debugScaleX,
+        fromY: camera.position.y * debugScaleY,
+        toX: (camera.position.x + camera.distance) * debugScaleX,
+        toY: (camera.position.y - camera.distance) * debugScaleY,
         width: 1,
         color: 'red'
     });
@@ -406,6 +399,10 @@ window.onload = function(){
         init(debugView, 'debugCanvas');
         scaleX = (playView.canvasWidth / worldWidth); // Difference between the "world" map and the rendering canvas
         scaleY = (playView.canvasHeight / worldHeight); // Difference between the "world" map and the rendering canvas
+
+        debugScaleX = (debugView.canvasWidth / worldWidth);
+        debugScaleY = (debugView.canvasHeight / worldHeight);
+
         console.log('Canvases initialized');
 
         // Render frame
@@ -417,8 +414,8 @@ window.onload = function(){
             const x = e.clientX - rect.left
             const y = e.clientY - rect.top
 
-            camera.position.x = x / scaleX;
-            camera.position.y = y / scaleY;
+            camera.position.x = x / debugScaleX;
+            camera.position.y = y / debugScaleY;
             ensureInMap();
             ensureAboveGround()
             //render();
@@ -490,10 +487,10 @@ function ensureAboveGround(){
     }
 }
 function ensureInMap(){
-    if(camera.position.y < 0) camera.position.y = worldHeight;
-    if(camera.position.y > playView.canvasHeight) camera.position.y = 0;
-    if(camera.position.x < 0) camera.position.x = worldWidth;
-    if(camera.position.x > worldHeight) camera.position.x = 0;
+    if(camera.position.y < 0) camera.position.y = worldHeight - movementSpeed;
+    if(camera.position.y > worldWidth) camera.position.y = 0 + movementSpeed;
+    if(camera.position.x < 0) camera.position.x = worldWidth - movementSpeed;
+    if(camera.position.x > worldHeight) camera.position.x = 0 + movementSpeed;
 }
 function moveForward(){
     camera.position.y-= movementSpeed;
