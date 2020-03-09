@@ -48,8 +48,8 @@ var camera = {
         }
     },
     position: {
-        x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
-        y: Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
+        x: 474, //Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
+        y: 270//Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
     },
     velocity: {
         x: 0.00,
@@ -58,16 +58,20 @@ var camera = {
         friction:{
             x: 0.05,
             y: 0.05,
-            z: 0.01
+            z: 0.002
         }
     },
     speeds: {
         x: 0.15,
         y: 0.15,
-        z: 0.025,
-        max: 5,
+        z: 0.004,
+        max: {
+            x: 5,
+            y: 5,
+            z: 5
+        }
     },
-    height: 0.50,  // Default to inbetween the min and max altitudes
+    height: 1.00,
     distance: 1000,
     horizon: Math.ceil(playView.canvasHeight / 2.0) // Default the horizon to drawing in the exact middle
 };
@@ -186,7 +190,7 @@ function gameLoop(){
     else if(camera.velocity.z < 0) camera.velocity.z += camera.velocity.friction.z;
 
     // And stop if we're slow enough
-    var stopThreshold = 0.01;
+    var stopThreshold = 0.00001;
     if(camera.velocity.x > 0 && camera.velocity.x < stopThreshold) camera.velocity.x = 0;
     if(camera.velocity.x < 0 && camera.velocity.x > -stopThreshold) camera.velocity.x = 0;
     if(camera.velocity.y > 0 && camera.velocity.y < stopThreshold) camera.velocity.y = 0;
@@ -560,7 +564,7 @@ var fallPressed = false;
 function ensureAboveGround(){
     var altitudeAtLocation = getHeightAt(camera.position.x, camera.position.y);
     if(camera.height <= altitudeAtLocation){
-        camera.height = altitudeAtLocation + 0.05;
+        camera.height = altitudeAtLocation + 0.1;
     }
 }
 function ensureInMap(){
@@ -570,23 +574,23 @@ function ensureInMap(){
     if(camera.position.x > worldHeight) camera.position.x = 0;
 }
 function moveForward(){
-    if(camera.velocity.y > -camera.speeds.max) camera.velocity.y-= camera.speeds.y;
+    if(camera.velocity.y > -camera.speeds.max.y) camera.velocity.y-= camera.speeds.y;
     ensureInMap();
 }
 function moveBackward(){
-    if(camera.velocity.y < camera.speeds.max) camera.velocity.y+=camera.speeds.y;
+    if(camera.velocity.y < camera.speeds.max.y) camera.velocity.y+=camera.speeds.y;
 }
 function moveLeft(){
-    if(camera.velocity.x > -camera.speeds.max) camera.velocity.x-=camera.speeds.x;
+    if(camera.velocity.x > -camera.speeds.max.x) camera.velocity.x-=camera.speeds.x;
 }
 function moveRight(){
-    if(camera.velocity.x < camera.speeds.max) camera.velocity.x+=camera.speeds.x;
+    if(camera.velocity.x < camera.speeds.max.x) camera.velocity.x+=camera.speeds.x;
     ensureInMap();
 }
 function moveUp(){
-    if(camera.velocity.z > -camera.speeds.max) camera.velocity.z -= camera.speeds.z;
+    if(camera.velocity.z > -camera.speeds.max.z) camera.velocity.z -= camera.speeds.z;
 }
 function moveDown(){
-    if(camera.velocity.z < camera.speeds.max) camera.velocity.z+= camera.speeds.z;
+    if(camera.velocity.z < camera.speeds.max.z) camera.velocity.z+= camera.speeds.z;
 }
 // END CONTROL
