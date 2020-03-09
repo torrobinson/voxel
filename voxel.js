@@ -6,6 +6,7 @@ var falloffStepAmount = 1/10000;
 
 var worldWidth = 0;
 var worldHeight = 0;
+var scaleHeight = 300;//parseInt(document.getElementById("scale"));
 
 // Represents much the view is scaled up compared to the map. Derived later.
 var scaleX = 0;
@@ -73,7 +74,7 @@ var camera = {
     },
     height: 1.00,
     distance: 1000,
-    horizon: Math.ceil(playView.canvasHeight / 2.0) // Default the horizon to drawing in the exact middle
+    horizon: 0 // Default the horizon to drawing in the exact middle
 };
 
 var allViews = [playView, debugView];
@@ -115,11 +116,6 @@ function init(view, canvasElementId){
     view.pixelRatio = getPixelRatio(view.context);
     view.initialWidth = view.canvasElement.clientWidth * view.pixelRatio;
     view.initialHeight = view.canvasElement.clientHeight * view.pixelRatio;
-
-    playView.canvasElement.bufarray = new ArrayBuffer(playView.canvasWidth * playView.canvasHeight * 4);
-    playView.canvasElement.buf8     = new Uint8Array(playView.canvasElement.bufarray);
-    playView.canvasElement.buf32    = new Uint32Array(playView.canvasElement.bufarray);
-
     rescale(view);
 }
 
@@ -283,7 +279,6 @@ function renderPlayView(){
 
 
             // Give our 0 -> 1 numbers some weight with a scale. Mucking around until a number feels right, given size of worldmap
-            var scaleHeight = 300;
 
             var screenY = Math.ceil(
                 (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
@@ -295,6 +290,7 @@ function renderPlayView(){
 
                 // If we're about to draw taller than the tallest line so far
                 var lengthToDrawDown = tallestLineStartYsPerX[screenX] - screenY;
+
                 if(lengthToDrawDown > 0){
                     // If we're not occluded by something previous to this voxel row that was "taller"
                     drawFrameBufferLineToBottom(frameImageData,
@@ -525,18 +521,6 @@ window.onload = function(){
         });
     });
 
-    document.getElementById('debugOn').onclick = function(e) {
-        debug = true;
-        document.getElementById('debugSegmentsOn').removeAttribute('disabled');
-        document.getElementById('debugSegmentsOff').removeAttribute('disabled');
-        document.getElementById('debugCanvas').style.display = 'block';
-    };
-    document.getElementById('debugOff').onclick = function(e) {
-        debug = false;
-        document.getElementById('debugSegmentsOn').setAttribute('disabled','disabled');
-        document.getElementById('debugSegmentsOff').setAttribute('disabled','disabled');
-        document.getElementById('debugCanvas').style.display = 'none';
-    };
     document.getElementById('debugSegmentsOn').onclick = function(e) {
         debugSegments = true;
     };
@@ -550,6 +534,32 @@ window.onload = function(){
         lodFalloff = false;
     };
 
+
+
+    document.getElementById('viewDistanceDisplay').innerHTML = camera.distance;
+    document.getElementById('viewDistance').oninput = function() {
+      camera.distance = parseInt(this.value);
+      document.getElementById("viewDistanceDisplay").innerHTML  = this.value;
+    }
+
+    var horizonMax = playView.canvasHeight;
+    var horizonMiddle = Math.ceil(horizonMax / 2.0);
+    var horizonMin = playView.canvasHeight * -1;
+    camera.horizon = horizonMiddle;
+    document.getElementById("horizonDisplay").innerHTML = camera.horizon;
+    document.getElementById("horizon").setAttribute('value', camera.horizon);
+    document.getElementById("horizon").setAttribute('min', horizonMin);
+    document.getElementById("horizon").setAttribute('max', horizonMax);
+    document.getElementById('horizon').oninput = function() {
+      camera.horizon = parseInt(this.value);
+      document.getElementById("horizonDisplay").innerHTML  = this.value;
+    }
+
+    document.getElementById("scaleDisplay").innerHTML  = scaleHeight;
+    document.getElementById('scale').oninput = function() {
+      scaleHeight  = parseInt(this.value);
+      document.getElementById("scaleDisplay").innerHTML  = this.value;
+    }
 
 };
 
