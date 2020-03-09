@@ -564,7 +564,14 @@ var fallPressed = false;
 function ensureAboveGround(){
     var altitudeAtLocation = getHeightAt(camera.position.x, camera.position.y);
     if(camera.height <= altitudeAtLocation){
-        camera.height = altitudeAtLocation + 0.1;
+        // If we go below or collide with the ground, go above ground with a reset and slighty upwards velocity
+        camera.height = altitudeAtLocation + 0.0;
+        camera.velocity.z = +0.016;
+    }
+    else if(camera.height >= 1.0){
+        // If we're too high, bounce back down
+        camera.height = 1.0;
+        camera.velocity.z = -0.032;
     }
 }
 function ensureInMap(){
