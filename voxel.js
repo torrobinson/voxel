@@ -442,10 +442,16 @@ var colorHolderCanvas = null;
 var heightHolderCanvas = null;
 
 window.onload = function(){
+	
+	// Define our source map files
+	var cacheAvoidance = "?t=" + new Date().getTime();
+	var colorFile = "color.png";
+	var heightFile = "height.png";
+	
     // Get the color/height images
     Promise.all([
 
-        loadImage("color.png",  (img) => {
+        loadImage(colorFile + cacheAvoidance,  (img) => {
             // Draw it to the preview
             colorHolderCanvas = document.getElementById('colorHolderCanvas');
             colorHolderCanvas.width = img.width;
@@ -456,7 +462,7 @@ window.onload = function(){
             colorImageData =  colorHolderCanvas.getContext('2d').getImageData(0, 0, img.width, img.height);
         }),
 
-        loadImage("height.png",  (img) => {
+        loadImage(heightFile + cacheAvoidance,  (img) => {
             // Draw it to the preview
             heightHolderCanvas = document.getElementById('heightHolderCanvas');
             heightHolderCanvas.width = img.width;
