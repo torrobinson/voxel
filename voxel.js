@@ -72,7 +72,8 @@ var camera = {
             z: 5
         }
     },
-    height: 1.00,
+    height: 0.5,
+    maxHeight: 1.5,
     distance: 1000,
     horizon: 0 // Default the horizon to drawing in the exact middle
 };
@@ -578,9 +579,9 @@ function ensureAboveGround(){
         camera.height = altitudeAtLocation + 0.0;
         camera.velocity.z = +0.016;
     }
-    else if(camera.height >= 1.0){
+    else if(camera.height >= camera.maxHeight){
         // If we're too high, bounce back down
-        camera.height = 1.0;
+        camera.height = camera.maxHeight;
         camera.velocity.z = -0.032;
     }
 }
