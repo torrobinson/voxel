@@ -188,12 +188,10 @@ function gameLoop(){
 
     // And stop if we're slow enough
     var stopThreshold = 0.00001;
-    if(camera.velocity.x > 0 && camera.velocity.x < stopThreshold) camera.velocity.x = 0;
-    if(camera.velocity.x < 0 && camera.velocity.x > -stopThreshold) camera.velocity.x = 0;
-    if(camera.velocity.y > 0 && camera.velocity.y < stopThreshold) camera.velocity.y = 0;
-    if(camera.velocity.y < 0 && camera.velocity.y > -stopThreshold) camera.velocity.y = 0;
-    if(camera.velocity.z > 0 && camera.velocity.z < stopThreshold) camera.velocity.z = 0;
-    if(camera.velocity.z < 0 && camera.velocity.z > -stopThreshold) camera.velocity.z = 0;
+    var stopThresholdZ = 0.0005;
+    if(camera.velocity.x != 0 && Math.abs(camera.velocity.x) < stopThreshold) camera.velocity.x = 0;
+    if(camera.velocity.y != 0 && Math.abs(camera.velocity.y) < stopThreshold) camera.velocity.y = 0;
+    if(camera.velocity.z != 0 && Math.abs(camera.velocity.z) < stopThresholdZ) camera.velocity.z = 0;
 
     // Wrap us around the map if we just left it
     ensureInMap();
@@ -599,7 +597,7 @@ function ensureInMap(){
 function getAngle(){
     var middleHorizonY = playView.canvasHeight / 2;
 
-    var maxHorizon = playView.canvasHeight * 3;
+    var maxHorizon = playView.canvasHeight * 8;
 
     if(camera.horizon > middleHorizonY){
         // Looking up
@@ -611,7 +609,7 @@ function getAngle(){
     }
     return 0;
 }
-var angleCoefficient = 2.0;
+var angleCoefficient = 4;
 function moveForward(){
     // Speed up, if we're under the limit
     if(camera.velocity.y > -camera.speeds.max.y) camera.velocity.y-= camera.speeds.y;
