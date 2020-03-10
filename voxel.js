@@ -2,7 +2,7 @@
 var debug = true;
 var debugSegments = false;
 var lodFalloff = true;
-var falloffStepAmount = 1/10000;
+var falloffStepAmount = 0.025;
 
 var worldWidth = 0;
 var worldHeight = 0;
@@ -59,17 +59,17 @@ var camera = {
         friction:{
             x: 0.05,
             y: 0.05,
-            z: 0.002
+            z: 0.00075
         }
     },
     speeds: {
         x: 0.15,
         y: 0.15,
-        z: 0.004,
+        z: 0.003,
         max: {
             x: 5,
             y: 5,
-            z: 5
+            z: 0.1
         }
     },
     height: 0.5,
@@ -313,7 +313,7 @@ function renderPlayView(){
 
         }
         if(lodFalloff){
-            stepLength+=z*falloffStepAmount;
+            stepLength+=falloffStepAmount;
         }
         z+=stepLength;
     }
@@ -442,12 +442,12 @@ var colorHolderCanvas = null;
 var heightHolderCanvas = null;
 
 window.onload = function(){
-	
+
 	// Define our source map files
 	var cacheAvoidance = "?t=" + new Date().getTime();
 	var colorFile = "color.png";
 	var heightFile = "height.png";
-	
+
     // Get the color/height images
     Promise.all([
 
@@ -504,8 +504,6 @@ window.onload = function(){
 
             camera.position.x = x / debugScaleX;
             camera.position.y = y / debugScaleY;
-            ensureInMap();
-            ensureAboveGround()
         });
 
         // Track key states
@@ -549,9 +547,10 @@ window.onload = function(){
       document.getElementById("viewDistanceDisplay").innerHTML  = this.value;
     }
 
-    var horizonMax = playView.canvasHeight;
-    var horizonMiddle = Math.ceil(horizonMax / 2.0);
-    var horizonMin = playView.canvasHeight * -1;
+    var horizonMiddle = Math.ceil(playView.canvasHeight / 2.0);
+
+    var horizonMax = horizonMiddle + playView.canvasHeight * 2.0;
+    var horizonMin = horizonMiddle + playView.canvasHeight * -2.0;
     camera.horizon = horizonMiddle;
     document.getElementById("horizonDisplay").innerHTML = camera.horizon;
     document.getElementById("horizon").setAttribute('value', camera.horizon);
@@ -597,19 +596,36 @@ function ensureInMap(){
     if(camera.position.x < 0) camera.position.x = worldWidth;
     if(camera.position.x > worldHeight) camera.position.x = 0;
 }
+function getAngle(){
+    var middleHorizonY = playView.canvasHeight / 2;
+
+    var maxHorizon = playView.canvasHeight * 3;
+
+    if(camera.horizon > middleHorizonY){
+        // Looking up
+        return (camera.horizon - middleHorizonY) / (maxHorizon);
+    }
+    else if (camera.horizon < middleHorizonY){
+        // Looking down
+        return -1* ( (middleHorizonY - camera.horizon) / (maxHorizon));
+    }
+    return 0;
+}
+var angleCoefficient = 2.0;
 function moveForward(){
+    // Speed up, if we're under the limit
     if(camera.velocity.y > -camera.speeds.max.y) camera.velocity.y-= camera.speeds.y;
-    ensureInMap();
+    if(camera.velocity.z < camera.speeds.max.z) camera.velocity.z += getAngle() * camera.speeds.z * angleCoefficient;
 }
 function moveBackward(){
     if(camera.velocity.y < camera.speeds.max.y) camera.velocity.y+=camera.speeds.y;
+    if(camera.velocity.z > -camera.speeds.max.z) camera.velocity.z -= getAngle() * camera.speeds.z * angleCoefficient;
 }
 function moveLeft(){
     if(camera.velocity.x > -camera.speeds.max.x) camera.velocity.x-=camera.speeds.x;
 }
 function moveRight(){
     if(camera.velocity.x < camera.speeds.max.x) camera.velocity.x+=camera.speeds.x;
-    ensureInMap();
 }
 function moveUp(){
     if(camera.velocity.z > -camera.speeds.max.z) camera.velocity.z -= camera.speeds.z;
