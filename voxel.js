@@ -49,8 +49,9 @@ var camera = {
         }
     },
     position: {
-        x: 474, //Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
-        y: 270//Math.ceil(worldHeight / 2.0) - 0 // Default in the middle
+        x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
+        y: Math.ceil(worldHeight / 2.0) - 0, // Default in the middle
+        z: 0.5 * scaleHeight
     },
     velocity: {
         x: 0.00,
@@ -59,21 +60,20 @@ var camera = {
         friction:{
             x: 0.05,
             y: 0.05,
-            z: 0.00075
+            z: 0.05
         }
     },
     speeds: {
         x: 0.15,
         y: 0.15,
-        z: 0.003,
+        z: 0.15,
         max: {
             x: 5,
             y: 5,
-            z: 0.1
+            z: 5
         }
     },
-    height: 0.5,
-    maxHeight: 1.5,
+    maxHeight: 1000,//1.5,
     distance: 1000,
     horizon: 0 // Default the horizon to drawing in the exact middle
 };
@@ -174,7 +174,7 @@ function gameLoop(){
     // Set camera position based on velocity
     camera.position.x += camera.velocity.x;
     camera.position.y += camera.velocity.y;
-    camera.height += camera.velocity.z;
+    camera.position.z += camera.velocity.z;
 
     // Constantly apply a negative velocity to our movement velocity
     if(camera.velocity.x > 0) camera.velocity.x -= camera.velocity.friction.x;
@@ -280,7 +280,7 @@ function renderPlayView(){
             // Give our 0 -> 1 numbers some weight with a scale. Mucking around until a number feels right, given size of worldmap
 
             var screenY = Math.ceil(
-                (camera.height * scaleHeight - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
+                (camera.position.z - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
             );
 
 
@@ -378,6 +378,7 @@ function loadImage(url, callback) {
   });
 }
 
+// Because javascript doesn't handle negative mod the way you'd expect
 function mod(n, m) {
   return ((n % m) + m) % m;
 }
@@ -417,6 +418,7 @@ function getColorAt(x,y){
     return  get1DArrayValueAtCoordinates(colorImageData,x,y);
 }
 function fade(color,amount){
+    // "Fade" by arbitrarily adding the same namber to r/g/b, which adds white and makes it brighter
     return [
         color[0] + amount,
         color[1] + amount,
@@ -576,16 +578,17 @@ var moveRightPressed = false;
 var risePressed = false;
 var fallPressed = false;
 function ensureAboveGround(){
+    // 0.0 -> 1.0
     var altitudeAtLocation = getHeightAt(camera.position.x, camera.position.y);
-    if(camera.height <= altitudeAtLocation){
+    if(camera.position.z <= (altitudeAtLocation * scaleHeight)){
         // If we go below or collide with the ground, go above ground with a reset and slighty upwards velocity
-        camera.height = altitudeAtLocation + 0.0;
-        camera.velocity.z = +0.016;
+        camera.position.z = altitudeAtLocation * scaleHeight;
+        camera.velocity.z = +2;
     }
-    else if(camera.height >= camera.maxHeight){
+    else if(camera.position.z >= camera.maxHeight){
         // If we're too high, bounce back down
-        camera.height = camera.maxHeight;
-        camera.velocity.z = -0.032;
+        camera.position.z = camera.maxHeight;
+        camera.velocity.z = -2;
     }
 }
 function ensureInMap(){
@@ -597,7 +600,7 @@ function ensureInMap(){
 function getAngle(){
     var middleHorizonY = playView.canvasHeight / 2;
 
-    var maxHorizon = playView.canvasHeight * 8;
+    var maxHorizon = playView.canvasHeight * 4;
 
     if(camera.horizon > middleHorizonY){
         // Looking up
@@ -609,7 +612,7 @@ function getAngle(){
     }
     return 0;
 }
-var angleCoefficient = 4;
+var angleCoefficient = 6;
 function moveForward(){
     // Speed up, if we're under the limit
     if(camera.velocity.y > -camera.speeds.max.y) camera.velocity.y-= camera.speeds.y;
