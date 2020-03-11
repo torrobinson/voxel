@@ -22,7 +22,7 @@ var frameImageData = null;
 
 var playView = {
     canvasHeight: 450,
-    canvasWidth: 900,
+    canvasWidth: 1200,
     context: null,
     canvasElement: null,
     pixelRatio: null,
@@ -51,9 +51,9 @@ var camera = {
     },
     fov: 90.00000,
     position: {
-        x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
-        y: Math.ceil(worldHeight / 2.0) - 0, // Default in the middle
-        z: 0.5 * scaleHeight
+        x: 925,//Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
+        y: 525,//Math.ceil(worldHeight / 2.0) - 0, // Default in the middle
+        z: 0.05 * scaleHeight
     },
     velocity: {
         x: 0.00,
@@ -75,8 +75,8 @@ var camera = {
             z: 2
         }
     },
-    maxHeight: 1000,//1.5,
-    viewdistance: 1000,
+    maxHeight: 1000,
+    viewdistance: 500,
     horizon: 0 // Default the horizon to drawing in the exact middle
 };
 
@@ -214,6 +214,15 @@ function gameLoop(){
 
     // And loop
     requestAnimationFrame(gameLoop);
+}
+
+// TODO: USE
+function rotatePointAroundOrigin(x, y, originX, originY, degrees){
+    // Translate point to origin, rotate it, then shift back away from origin in opposite direction to "rotate" it around the origin
+    // https://stackoverflow.com/a/12161405/1669011
+    var newX = originX + (x-originX)*cosDegrees(x) - (y-originY)*sinDegrees(degrees);
+    var newY = originY + (x-originX)*sinDegrees(x) + (y-originY)*cosDegrees(degrees);
+    return {x: newX, y: newY};
 }
 
 function renderPlayView(){
