@@ -6,7 +6,7 @@ var falloffStepAmount = 0.025;
 
 var worldWidth = 0;
 var worldHeight = 0;
-var scaleHeight = 300;//parseInt(document.getElementById("scale"));
+var scaleHeight = 300;
 
 // Represents much the view is scaled up compared to the map. Derived later.
 var scaleX = 0;
@@ -64,13 +64,13 @@ var camera = {
         }
     },
     speeds: {
-        x: 0.15,
-        y: 0.15,
-        z: 0.15,
+        x: 0.10,
+        y: 0.10,
+        z: 0.10,
         max: {
-            x: 5,
-            y: 5,
-            z: 5
+            x: 2,
+            y: 2,
+            z: 2
         }
     },
     maxHeight: 1000,//1.5,
@@ -220,7 +220,7 @@ function renderPlayView(){
         frameImageData.data[i+3] = 255;
     }
 
-    var percentFromBackToFade = 0.25;
+    var percentFromBackToFade = 0.45;
     var layersFromBackToFade = camera.distance * percentFromBackToFade;
     var maxFadeAdd= 255.0;
     var fadePerLayer = maxFadeAdd/layersFromBackToFade;
