@@ -583,12 +583,12 @@ function ensureAboveGround(){
     if(camera.position.z <= (altitudeAtLocation * scaleHeight)){
         // If we go below or collide with the ground, go above ground with a reset and slighty upwards velocity
         camera.position.z = altitudeAtLocation * scaleHeight;
-        camera.velocity.z = +2;
+        camera.velocity.z *=-1;
     }
     else if(camera.position.z >= camera.maxHeight){
         // If we're too high, bounce back down
         camera.position.z = camera.maxHeight;
-        camera.velocity.z = -2;
+        camera.velocity.z *=-1;
     }
 }
 function ensureInMap(){
