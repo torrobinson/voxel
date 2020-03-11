@@ -1,8 +1,9 @@
 // BEGIN RENDERING
 var debug = true;
-var debugSegments = false;
+var debugSegments = true;
 var lodFalloff = true;
 var falloffStepAmount = 0.025;
+var enableFade = false;
 
 var worldWidth = 0;
 var worldHeight = 0;
@@ -48,6 +49,7 @@ var camera = {
             b: 255
         }
     },
+    fov: 90.00000,
     position: {
         x: Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
         y: Math.ceil(worldHeight / 2.0) - 0, // Default in the middle
@@ -74,7 +76,7 @@ var camera = {
         }
     },
     maxHeight: 1000,//1.5,
-    distance: 1000,
+    viewdistance: 1000,
     horizon: 0 // Default the horizon to drawing in the exact middle
 };
 
@@ -145,6 +147,14 @@ function drawFrameBufferLineToBottom(imageData, lengthDown, x, y, r, g, b){
 }
 
 
+// Math
+
+// Tan normally accepts radians, not degrees
+function tanDegrees(degrees) {
+  return Math.tan(degrees * Math.PI/180);
+}
+
+
 
 function drawLineToBottom(view, options) {
     drawLine(view, {
@@ -188,10 +198,9 @@ function gameLoop(){
 
     // And stop if we're slow enough
     var stopThreshold = 0.00001;
-    var stopThresholdZ = 0.0005;
     if(camera.velocity.x != 0 && Math.abs(camera.velocity.x) < stopThreshold) camera.velocity.x = 0;
     if(camera.velocity.y != 0 && Math.abs(camera.velocity.y) < stopThreshold) camera.velocity.y = 0;
-    if(camera.velocity.z != 0 && Math.abs(camera.velocity.z) < stopThresholdZ) camera.velocity.z = 0;
+    if(camera.velocity.z != 0 && Math.abs(camera.velocity.z) < stopThreshold) camera.velocity.z = 0;
 
     // Wrap us around the map if we just left it
     ensureInMap();
@@ -213,35 +222,62 @@ function renderPlayView(){
     frameImageData = playView.context.createImageData(playView.canvasWidth, playView.canvasHeight);
 
     // paint the sky
-    for(var i=0; i<= frameImageData.data.length; i+=4){
-        frameImageData.data[i] = camera.sky.color.r;
-        frameImageData.data[i+1] = camera.sky.color.g;
-        frameImageData.data[i+2] = camera.sky.color.b;
-        frameImageData.data[i+3] = 255;
-    }
+    // for(var i=0; i<= frameImageData.data.length; i+=4){
+    //     frameImageData.data[i] = camera.sky.color.r;
+    //     frameImageData.data[i+1] = camera.sky.color.g;
+    //     frameImageData.data[i+2] = camera.sky.color.b;
+    //     frameImageData.data[i+3] = 255;
+    // }
 
-    var percentFromBackToFade = 0.45;
-    var layersFromBackToFade = camera.distance * percentFromBackToFade;
+    var percentFromBackToFade = 0.50;
+    var layersFromBackToFade = camera.viewdistance * percentFromBackToFade;
     var maxFadeAdd= 255.0;
     var fadePerLayer = maxFadeAdd/layersFromBackToFade;
-
 
     // XXX
     var z = 1;
     var stepLength = 1;
     var tallestLineStartYsPerX = new Array(playView.canvasWidth).fill(playView.canvasHeight);
-    while(z < camera.distance){
+    while(z < camera.viewdistance){
 
         // At that distance, we visualize a line of "voxels" that we'll source color and height info from
-        var leftMostPointX = camera.position.x - z; // field of view widens by 1 for every 1 distance away
-        var rightMostPointX = camera.position.x + z; // field of view widens by 1 for every 1 distance away
+
+        // Get the left point and the right point we'll render inbetween
+
+        // We need the distanct left and right of the camera center
+        //+
+        //|                       +-> WE NEED TO KNOW THIS
+        //| distance <------+     |
+        //| away            |     |
+        //|       XXXXXXXXXX|XXXXXXXXXXXX
+        //|        X        |X       + X
+        //|         X       |X       |X
+        //|          X      |X       |
+        //|           X     +X      X|
+        //|            X     X     X +------->180-90-(fov/2)
+        //|             X    X    X
+        //|              X   X   X
+        //|               X  X +X
+        //|                X X |
+        //|                 XXX+--------------------->FOV / 2
+        //|                  X
+        //+--------------------------------+
+
+        // Since tan(Θ) = opp/adja
+        // tan(180-90-(fov/2)) = (distance away to render) / X
+        // tan(90-0.5fov) = z / x
+        // x = z/(tan*(90-0.5fov))
+        // So...
+        var hdist = z/(tanDegrees(90-(camera.fov/2)));
+        var leftMostPointX = camera.position.x - hdist;
+        var rightMostPointX = camera.position.x + hdist;
 
         // What percent of voxel current distance row is of screenspace?
         var voxelRowToScreenRatio = (rightMostPointX - leftMostPointX) / playView.canvasWidth;
 
         var layerFadeAdd;
-        if(z >= camera.distance - layersFromBackToFade){
-            layerFadeAdd = Math.abs(camera.distance-layersFromBackToFade-z)*fadePerLayer;
+        if(enableFade && (z >= camera.viewdistance - layersFromBackToFade)){
+            layerFadeAdd = Math.abs(camera.viewdistance-layersFromBackToFade-z)*fadePerLayer;
         }
         else{
             layerFadeAdd = 0;
@@ -338,13 +374,17 @@ function renderDebugView(){
         color: 'red'
     });
 
+    var hdist = camera.viewdistance/(tanDegrees(90-(camera.fov/2)));
+    var leftMostPointX = camera.position.x - hdist;
+    var rightMostPointX = camera.position.x + hdist;
+
     // Draw the FOV
     // Left
     drawLine(debugView,{
         fromX: camera.position.x * debugScaleX,
         fromY: camera.position.y * debugScaleY,
-        toX: (camera.position.x - camera.distance) * debugScaleX,
-        toY: (camera.position.y - camera.distance) * debugScaleY,
+        toX: (leftMostPointX) * debugScaleX,
+        toY: (camera.position.y - camera.viewdistance) * debugScaleY,
         width: 1,
         color: 'red'
     });
@@ -352,8 +392,8 @@ function renderDebugView(){
     drawLine(debugView,{
         fromX: camera.position.x * debugScaleX,
         fromY: camera.position.y * debugScaleY,
-        toX: (camera.position.x + camera.distance) * debugScaleX,
-        toY: (camera.position.y - camera.distance) * debugScaleY,
+        toX: (rightMostPointX) * debugScaleX,
+        toY: (camera.position.y - camera.viewdistance) * debugScaleY,
         width: 1,
         color: 'red'
     });
@@ -420,9 +460,9 @@ function getColorAt(x,y){
 function fade(color,amount){
     // "Fade" by arbitrarily adding the same namber to r/g/b, which adds white and makes it brighter
     return [
-        color[0] + amount,
-        color[1] + amount,
-        color[2] + amount,
+        color[0] - amount,
+        color[1] - amount,
+        color[2] - amount,
         color[3]
     ];
 };
@@ -541,10 +581,17 @@ window.onload = function(){
 
 
 
-    document.getElementById('viewDistanceDisplay').innerHTML = camera.distance;
+    document.getElementById('viewDistanceDisplay').innerHTML = camera.viewdistance;
     document.getElementById('viewDistance').oninput = function() {
-      camera.distance = parseInt(this.value);
+      camera.viewdistance = parseInt(this.value);
       document.getElementById("viewDistanceDisplay").innerHTML  = this.value;
+    }
+
+
+    document.getElementById('viewFieldOfView').innerHTML = camera.fov;
+    document.getElementById('fieldOfView').oninput = function() {
+      camera.fov = parseInt(this.value);
+      document.getElementById("viewFieldOfView").innerHTML  = this.value;
     }
 
     var horizonMiddle = Math.ceil(playView.canvasHeight / 2.0);
