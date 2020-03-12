@@ -1,4 +1,7 @@
 // BEGIN RENDERING
+
+var ticksPerSecond = 20;
+
 var debug = true;
 var debugSegments = true;
 var lodFalloff = true;
@@ -21,8 +24,8 @@ var heightImageData = null;
 var frameImageData = null;
 
 var playView = {
-    canvasHeight: 450,
-    canvasWidth: 1200,
+    canvasHeight: 400,
+    canvasWidth: 600,
     context: null,
     canvasElement: null,
     pixelRatio: null,
@@ -49,26 +52,26 @@ var camera = {
             b: 255
         }
     },
-    fov: 90.00000,
+    fov: 60.00,
     position: {
         x: 925,//Math.ceil(worldWidth / 2.0) - 0, // Default in the middle
         y: 525,//Math.ceil(worldHeight / 2.0) - 0, // Default in the middle
-        z: 0.05 * scaleHeight
+        z: 0.05 * scaleHeight // Start 5% off the ground
     },
     velocity: {
         x: 0.00,
         y: 0.00,
         z: 0.00,
         friction:{
-            x: 0.05,
-            y: 0.05,
-            z: 0.05
+            x: 0.008, // per tick
+            y: 0.008, // per tick
+            z: 0.008  // per tick
         }
     },
     speeds: {
-        x: 0.10,
-        y: 0.10,
-        z: 0.10,
+        x: 0.04,  // per tick
+        y: 0.04,  // per tick
+        z: 0.04,  // per tick
         max: {
             x: 2,
             y: 2,
@@ -148,13 +151,21 @@ function drawFrameBufferLineToBottom(imageData, lengthDown, x, y, r, g, b){
 
 
 // Math
-
-// Tan normally accepts radians, not degrees
+// JS trig functions normally accepts radians, not degrees. We use degrees.
 function tanDegrees(degrees) {
   return Math.tan(degrees * Math.PI/180);
 }
-
-
+function sinDegrees(degrees) {
+  return Math.sin(degrees * Math.PI/180);
+}
+function cosDegrees(degrees) {
+  return Math.cos(degrees * Math.PI/180);
+}
+// Because javascript doesn't handle negative mod the way you'd expect
+function mod(n, m) {
+  return ((n % m) + m) % m;
+}
+// End Math
 
 function drawLineToBottom(view, options) {
     drawLine(view, {
@@ -172,7 +183,11 @@ function drawCircle(view, options){
     view.context.stroke();
 }
 
-function gameLoop(){
+function gameTickElapsed(millisecondsProgressed){
+    if(millisecondsProgressed === undefined || isNaN(millisecondsProgressed)) return;
+
+    var ticksElapsed =  millisecondsProgressed / ticksPerSecond;
+
     // Based on key states, affect run movement
     if(moveForwardPressed) moveForward();
     if(downBackPressed) moveBackward();
@@ -180,11 +195,6 @@ function gameLoop(){
     if(moveRightPressed) moveRight();
     if(risePressed) moveUp();
     if(fallPressed) moveDown();
-
-    // Set camera position based on velocity
-    camera.position.x += camera.velocity.x;
-    camera.position.y += camera.velocity.y;
-    camera.position.z += camera.velocity.z;
 
     // Constantly apply a negative velocity to our movement velocity
     if(camera.velocity.x > 0) camera.velocity.x -= camera.velocity.friction.x;
@@ -202,18 +212,32 @@ function gameLoop(){
     if(camera.velocity.y != 0 && Math.abs(camera.velocity.y) < stopThreshold) camera.velocity.y = 0;
     if(camera.velocity.z != 0 && Math.abs(camera.velocity.z) < stopThreshold) camera.velocity.z = 0;
 
+    // Set camera position based on velocity
+    camera.position.x += camera.velocity.x * ticksElapsed;
+    camera.position.y += camera.velocity.y * ticksElapsed;
+    camera.position.z += camera.velocity.z * ticksElapsed;
+
     // Wrap us around the map if we just left it
     ensureInMap();
 
     // Ensure we can't clip into the map
     ensureAboveGround();
+}
+
+var lastRender;
+function renderLoop(timestamp){
+    var millisecondsBetweenRenders = timestamp - lastRender;
+
+    gameTickElapsed(millisecondsBetweenRenders)
 
     // Render
     if(debug){renderDebugView();}
     renderPlayView();
 
+    lastRender =  timestamp;
+
     // And loop
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(renderLoop);
 }
 
 // TODO: USE
@@ -320,30 +344,31 @@ function renderPlayView(){
             if(layerFadeAdd > 0)
                 color = fade(color, layerFadeAdd);
 
-
-
-            // Give our 0 -> 1 numbers some weight with a scale. Mucking around until a number feels right, given size of worldmap
-
             var screenY = Math.ceil(
-                (camera.position.z - altitudeModifier * scaleHeight) / z * scaleHeight + camera.horizon
+                (camera.position.z - altitudeModifier * scaleHeight)    // render lower the higher the camera is
+                / z * scaleHeight                                       // and lower proportional to distance from camera (fake perspective)
+                + camera.horizon                                        // and lower still to move this false horizon to the center of the "screen"
             );
 
 
             // Drawing at anything off screen is useless
             if(screenY<playView.canvasHeight){
 
-                // If we're about to draw taller than the tallest line so far
+                // Calculate how far down we're about to draw by sourcing it from our known max heights
+                // This defaults to the screen height (or the very bottom) so we're safe to use it before
+                // it gets properly filled (it's been prefilled with screenheight)
                 var lengthToDrawDown = tallestLineStartYsPerX[screenX] - screenY;
 
+                // If we're actually doing to draw anything
                 if(lengthToDrawDown > 0){
-                    // If we're not occluded by something previous to this voxel row that was "taller"
+
                     drawFrameBufferLineToBottom(frameImageData,
-                        lengthToDrawDown, // lengthdown
-                        screenX, //x
-                        screenY, //y
-                        color[0], //r
-                        color[1], //g
-                        color[2] //b
+                        lengthToDrawDown,       // length down to draw
+                        screenX,                //x origin
+                        screenY,                //y origin
+                        color[0],               // pixel r
+                        color[1],               // pixel g
+                        color[2]                // pixel b
                      );
                 }
 
@@ -353,16 +378,19 @@ function renderPlayView(){
                 }
             }
 
-
         }
+
+        // Increase our render distance to draw the next slice
         if(lodFalloff){
             stepLength+=falloffStepAmount;
         }
         z+=stepLength;
     }
 
+    // Put the image data to the screen
+    // NOTE: I tried using the canva's built-in helpers for drawing lines, but setInterval(function () {
+    // was nearly four times as slow. Hilariously, the slowest part was setting the stroke color (???)
     playView.context.putImageData(frameImageData,0,0);
-
 }
 
 function renderDebugView(){
@@ -427,10 +455,6 @@ function loadImage(url, callback) {
   });
 }
 
-// Because javascript doesn't handle negative mod the way you'd expect
-function mod(n, m) {
-  return ((n % m) + m) % m;
-}
 
 function wrapNumber(index,length){
     if(index < 0 || index > length){
@@ -542,8 +566,8 @@ window.onload = function(){
 
         console.log('Canvases initialized');
 
-        // Strart game loop
-        gameLoop();
+        // Start the render loop
+        renderLoop();
 
         // On debug map clicks, teleport camera to that location
         debugView.canvasElement.addEventListener('mousedown', function(e) {
