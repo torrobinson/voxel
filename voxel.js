@@ -83,6 +83,15 @@ var camera = {
     horizon: 0 // Default the horizon to drawing in the exact middle
 };
 
+var world = {
+    gravity: {
+        x: 0.00,
+        y: 0.00,
+        z: 0.00//-0.05
+    },
+    groundElasticity: 0.5 // 0-> 1
+};
+
 var allViews = [playView, debugView];
 
 function getPixelRatio(context) {
@@ -205,6 +214,9 @@ function gameTickElapsed(millisecondsProgressed){
 
     if(camera.velocity.z > 0) camera.velocity.z -= camera.velocity.friction.z;
     else if(camera.velocity.z < 0) camera.velocity.z += camera.velocity.friction.z;
+
+    // Constantly apply gravity
+    camera.velocity.z += world.gravity.z;
 
     // And stop if we're slow enough
     var stopThreshold = 0.00001;
@@ -663,12 +675,12 @@ function ensureAboveGround(){
     if(camera.position.z <= (altitudeAtLocation * scaleHeight)){
         // If we go below or collide with the ground, go above ground with a reset and slighty upwards velocity
         camera.position.z = altitudeAtLocation * scaleHeight;
-        camera.velocity.z *=-1;
+        camera.velocity.z *=-world.groundElasticity;
     }
     else if(camera.position.z >= camera.maxHeight){
         // If we're too high, bounce back down
         camera.position.z = camera.maxHeight;
-        camera.velocity.z *=-1;
+        camera.velocity.z *=-world.groundElasticity;
     }
 }
 function ensureInMap(){
